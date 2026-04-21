@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lex · Análisis Documental</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+  :root {
+    --paper: #f1e9db;
+    --paper-deep: #e6dcc8;
+    --ink: #1b1815;
+    --ink-soft: #55504a;
+    --oxblood: #732939;
+    --sepia: #8a6a3c;
+    --alert-high: #a71f2d;
+    --alert-med: #b57a1f;
+    --alert-low: #5a6b3c;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(139,107,60,0.06), transparent 50%),
+      radial-gradient(circle at 80% 90%, rgba(115,41,57,0.05), transparent 55%);
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.3;
+    mix-blend-mode: multiply;
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  }
+
+  .container {
+    position: relative;
+    z-index: 2;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+  }
+  @media (min-width: 768px) { .container { padding: 4rem 1.5rem; } }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1.5rem;
+  }
+  .key-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    background: rgba(255,255,255,0.4);
+    border: 1px solid var(--paper-deep);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .key-status:hover { border-color: var(--ink); color: var(--ink); }
+  .key-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--alert-low);
+  }
+  .key-status.missing .key-dot { background: var(--alert-high); }
+
+  header { margin-bottom: 2.5rem; }
+  @media (min-width: 768px) { header { margin-bottom: 3.5rem; } }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    color: var(--oxblood);
+  }
+  .eyebrow-line { width: 32px; height: 1px; background: var(--oxblood); }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.25rem, 6.5vw, 5rem);
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+    margin-bottom: 1rem;
+  }
+  h1 em { font-weight: 400; font-style: italic; color: var(--oxblood); }
+
+  .lead {
+    max-width: 640px;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+  @media (min-width: 768px) { .lead { font-size: 1.125rem; } }
+
+  /* API key gate / modal */
+  .key-gate {
+    padding: 2.5rem 2rem;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    margin-bottom: 2rem;
+    max-width: 640px;
+  }
+  .key-gate h2 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.2;
+  }
+  .key-gate p {
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    margin-bottom: 1.25rem;
+    line-height: 1.6;
+  }
+  .key-gate p a { color: var(--oxblood); }
+  .key-input-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .key-input {
+    flex: 1;
+    min-width: 220px;
+    padding: 0.75rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    background: var(--paper);
+    border: 1px solid var(--ink-soft);
+    border-radius: 2px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .key-input:focus { border-color: var(--oxblood); }
+  .key-help {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--ink-soft);
+  }
+  .key-help a { color: var(--oxblood); text-decoration: underline; }
+
+  .btn-primary {
+    padding: 0.75rem 1.5rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--oxblood); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .upload-zone {
+    border: 2px dashed var(--ink-soft);
+    border-radius: 4px;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: rgba(255,255,255,0.35);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .upload-zone.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .upload-zone.compact { padding: 1.5rem; }
+  .upload-zone:hover,
+  .upload-zone.drag-over {
+    border-color: var(--oxblood);
+    background: rgba(115,41,57,0.04);
+  }
+  .upload-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px; height: 72px;
+    border: 1px solid var(--ink);
+    border-radius: 50%;
+    margin-bottom: 1.5rem;
+  }
+  .upload-zone.compact .upload-icon {
+    width: 40px; height: 40px; margin-bottom: 0.5rem;
+  }
+  .upload-zone.compact .upload-icon svg { width: 18px; height: 18px; }
+  .upload-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  @media (min-width: 768px) { .upload-title { font-size: 1.875rem; } }
+  .upload-zone.compact .upload-title { font-size: 1.1rem; margin-bottom: 0.25rem; }
+  .upload-hint { font-family: var(--font-mono); font-size: 0.875rem; color: var(--ink-soft); }
+  .upload-zone.compact .upload-hint { font-size: 0.75rem; }
+
+  input[type="file"] { display: none; }
+
+  .error-box {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    display: flex;
+    gap: 0.75rem;
+    background: #f7e5e4;
+    border-left: 3px solid var(--alert-high);
+  }
+  .error-box svg { color: var(--alert-high); flex-shrink: 0; margin-top: 2px; }
+  .error-title { color: var(--alert-high); font-weight: 600; }
+  .error-msg { font-size: 0.875rem; color: var(--ink); }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 2rem 0 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--ink);
+  }
+  .toolbar-info {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-soft);
+  }
+  .toolbar-info strong { color: var(--ink); }
+  .toolbar-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .btn:hover { background: var(--ink); color: var(--paper); }
+  .btn.danger { border-color: var(--oxblood); color: var(--oxblood); }
+  .btn.danger:hover { background: var(--oxblood); color: var(--paper); }
+
+  .docs { display: flex; flex-direction: column; gap: 1rem; }
+
+  .doc {
+    background: rgba(255,255,255,0.4);
+    border: 1px solid var(--paper-deep);
+    transition: all 0.2s;
+  }
+  .doc.error-state { border-color: var(--alert-high); }
+
+  .doc-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .doc-head:hover { background: rgba(255,255,255,0.3); }
+
+  .doc-status {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .doc-status.loading svg { animation: spin 1s linear infinite; color: var(--oxblood); }
+  .doc-status.done svg { color: var(--alert-low); }
+  .doc-status.error svg { color: var(--alert-high); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .doc-info { flex: 1; min-width: 0; }
+  .doc-filename {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .file-badge {
+    display: inline-flex;
+    padding: 0.1rem 0.4rem;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    border-radius: 2px;
+  }
+  .file-badge.docx { background: var(--sepia); }
+  .doc-type {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    line-height: 1.3;
+    margin-top: 0.15rem;
+  }
+  .doc-type.pending { color: var(--ink-soft); font-style: italic; font-size: 1rem; }
+
+  .doc-actions { display: flex; gap: 0.5rem; flex-shrink: 0; align-items: center; }
+
+  .btn-listen-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  .btn-listen-mini:hover { background: var(--oxblood); }
+  .btn-listen-mini.playing { background: var(--oxblood); }
+
+  .btn-icon {
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 1px solid var(--ink-soft);
+    border-radius: 2px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: all 0.2s;
+  }
+  .btn-icon:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  .chevron { transition: transform 0.3s; }
+  .doc.expanded .chevron { transform: rotate(180deg); }
+
+  .doc-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+  }
+  .doc.expanded .doc-body { max-height: 20000px; }
+
+  .doc-body-inner {
+    padding: 1.5rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    border-top: 1px dotted var(--paper-deep);
+  }
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    color: var(--ink-soft);
+  }
+
+  .summary {
+    padding: 1.25rem;
+    background: rgba(255,255,255,0.5);
+    border-left: 3px solid var(--oxblood);
+  }
+  .summary-text {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.05rem;
+    line-height: 1.55;
+  }
+  @media (min-width: 768px) { .summary-text { font-size: 1.15rem; } }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  @media (min-width: 640px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+  .card { padding: 1.25rem; background: rgba(255,255,255,0.4); }
+
+  .list-item {
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px dotted var(--ink-soft);
+  }
+  .list-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+  .item-name { font-family: var(--font-display); font-size: 1rem; }
+  .item-role {
+    margin-top: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--oxblood);
+  }
+  .item-date { font-family: var(--font-mono); color: var(--oxblood); font-size: 0.85rem; }
+  .item-desc { margin-top: 0.25rem; font-size: 0.85rem; color: var(--ink); }
+  .empty { font-size: 0.85rem; font-style: italic; color: var(--ink-soft); }
+
+  .clauses { display: flex; flex-direction: column; gap: 0.85rem; }
+  .clause {
+    display: flex;
+    gap: 0.85rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--paper-deep);
+  }
+  .clause:last-child { border-bottom: none; padding-bottom: 0; }
+  .clause-num {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ink); color: var(--paper);
+    font-family: var(--font-mono); font-size: 0.7rem;
+    border-radius: 2px;
+  }
+  .clause-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; }
+  .clause-detail { margin-top: 0.25rem; font-size: 0.85rem; line-height: 1.5; color: var(--ink-soft); }
+
+  .alerts { display: flex; flex-direction: column; gap: 0.5rem; }
+  .alert { padding: 0.85rem; display: flex; gap: 0.75rem; }
+  .alert.high { background: #f7e5e4; border-left: 3px solid var(--alert-high); }
+  .alert.med  { background: #f7ecd4; border-left: 3px solid var(--alert-med); }
+  .alert.low  { background: #ebeddc; border-left: 3px solid var(--alert-low); }
+
+  .alert-badge {
+    flex-shrink: 0;
+    align-self: flex-start;
+    padding: 0.2rem 0.45rem;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: #fff;
+  }
+  .alert-badge.high { background: var(--alert-high); }
+  .alert-badge.med  { background: var(--alert-med); }
+  .alert-badge.low  { background: var(--alert-low); }
+  .alert-text { font-size: 0.85rem; line-height: 1.5; color: var(--ink); }
+
+  .no-alerts {
+    padding: 1rem;
+    display: flex; align-items: center; gap: 0.75rem;
+    background: #ebeddc;
+    border-left: 3px solid var(--alert-low);
+  }
+  .no-alerts svg { color: var(--alert-low); }
+  .no-alerts p { font-size: 0.85rem; color: var(--ink); }
+
+  .recs { padding: 1.25rem; background: var(--ink); color: var(--paper); }
+  .recs .section-label { color: rgba(241,233,219,0.7); }
+  .recs ul { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+  .recs li { display: flex; gap: 0.75rem; font-family: var(--font-display); font-size: 1rem; }
+  .rec-arrow { font-family: var(--font-mono); color: var(--paper-deep); opacity: 0.6; }
+
+  .doc-error-msg {
+    padding: 1rem 1.25rem;
+    color: var(--alert-high);
+    font-size: 0.875rem;
+    background: #f7e5e4;
+  }
+
+  .disclaimer {
+    padding: 2.5rem 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-align: center;
+    color: var(--ink-soft);
+  }
+
+  .hidden { display: none !important; }
+  .icon-sm { width: 16px; height: 16px; flex-shrink: 0; }
+  .icon-md { width: 20px; height: 20px; flex-shrink: 0; }
+  .icon-lg { width: 28px; height: 28px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Top bar with API key status -->
+  <div class="topbar">
+    <button id="keyStatusBtn" class="key-status missing" title="Administrar API key">
+      <span class="key-dot"></span>
+      <span id="keyStatusText">API KEY NO CONFIGURADA</span>
+    </button>
+  </div>
+
+  <header>
+    <div class="eyebrow">
+      <div class="eyebrow-line"></div>
+      Lex · Análisis Documental
+    </div>
+    <h1>
+      Sube tus documentos,<br />
+      <em>entiéndelos en segundos.</em>
+    </h1>
+    <p class="lead">
+      Contratos, escrituras, pagarés, actas. Sube uno o varios archivos
+      <strong>PDF o Word</strong> a la vez. La IA identifica cada documento,
+      extrae partes, fechas y cláusulas clave, señala errores o riesgos, y te
+      lo lee en voz alta.
+    </p>
+  </header>
+
+  <!-- API key setup gate -->
+  <div id="keyGate" class="key-gate">
+    <h2>Configura tu API key de Anthropic</h2>
+    <p>
+      Esta herramienta usa la API de Claude para analizar tus documentos.
+      Necesitas una API key (se obtiene en <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>,
+      pagas solo por uso, unos centavos por documento).
+      Tu clave se guarda solo en <strong>tu navegador</strong>, nunca se envía a ningún servidor nuestro.
+    </p>
+    <div class="key-input-row">
+      <input type="password" id="keyInput" class="key-input" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false" />
+      <button class="btn-primary" id="btnSaveKey">Guardar</button>
+    </div>
+    <p class="key-help">
+      ¿No tienes una?
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Crear API key →</a>
+    </p>
+  </div>
+
+  <!-- Main upload zone -->
+  <div id="uploadZone" class="upload-zone disabled">
+    <input type="file" id="fileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
+    <div class="upload-icon">
+      <svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <p class="upload-title">Arrastra tus documentos aquí</p>
+    <p class="upload-hint">PDF o Word (.docx) · varios a la vez · máx 20 MB c/u</p>
+  </div>
+
+  <div id="errorBox" class="error-box hidden">
+    <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <div>
+      <p class="error-title">Error</p>
+      <p id="errorMsg" class="error-msg"></p>
+    </div>
+  </div>
+
+  <div id="toolbar" class="toolbar hidden">
+    <div class="toolbar-info">
+      <span id="statsText"></span>
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn" id="btnExpandAll">Expandir todo</button>
+      <button class="btn" id="btnCollapseAll">Contraer todo</button>
+      <button class="btn danger" id="btnClearAll">Limpiar todo</button>
+    </div>
+  </div>
+
+  <div id="docs" class="docs"></div>
+
+  <div id="uploadMore" class="upload-zone compact hidden" style="margin-top: 1rem;">
+    <input type="file" id="fileInputMore" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    </div>
+    <p class="upload-title">Añadir más documentos</p>
+    <p class="upload-hint">PDF o Word · arrastra o haz clic</p>
+  </div>
+
+  <p id="disclaimer" class="disclaimer hidden">
+    Este análisis es informativo. No sustituye el consejo de un abogado.
+  </p>
+</div>
+
+<script>
+  const API_URL = 'https://api.anthropic.com/v1/messages';
+  const MODEL = 'claude-sonnet-4-20250514';
+  const MAX_SIZE = 20 * 1024 * 1024;
+  const STORAGE_KEY = 'lex_anthropic_api_key';
+
+  const $ = (id) => document.getElementById(id);
+  const uploadZone = $('uploadZone');
+  const uploadMore = $('uploadMore');
+  const fileInput = $('fileInput');
+  const fileInputMore = $('fileInputMore');
+  const errorBox = $('errorBox');
+  const errorMsg = $('errorMsg');
+  const toolbar = $('toolbar');
+  const statsText = $('statsText');
+  const docsEl = $('docs');
+  const disclaimer = $('disclaimer');
+  const keyGate = $('keyGate');
+  const keyInput = $('keyInput');
+  const btnSaveKey = $('btnSaveKey');
+  const keyStatusBtn = $('keyStatusBtn');
+  const keyStatusText = $('keyStatusText');
+
+  const documents = new Map();
+  let nextId = 1;
+  let currentSpeech = null;
+  let apiKey = null;
+
+  // ---------- API key management ----------
+  function loadKey() {
+    try {
+      apiKey = localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      apiKey = null;
+    }
+    updateKeyUI();
+  }
+
+  function saveKey(value) {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, trimmed);
+    } catch (e) { /* ignore */ }
+    apiKey = trimmed;
+    updateKeyUI();
+    hideError();
+  }
+
+  function clearKey() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    apiKey = null;
+    keyInput.value = '';
+    updateKeyUI();
+  }
+
+  function updateKeyUI() {
+    const hasKey = !!apiKey;
+    keyGate.classList.toggle('hidden', hasKey);
+    uploadZone.classList.toggle('disabled', !hasKey);
+    if (hasKey) {
+      keyStatusBtn.classList.remove('missing');
+      const masked = apiKey.slice(0, 10) + '…' + apiKey.slice(-4);
+      keyStatusText.textContent = 'KEY: ' + masked;
+    } else {
+      keyStatusBtn.classList.add('missing');
+      keyStatusText.textContent = 'API KEY NO CONFIGURADA';
+    }
+  }
+
+  btnSaveKey.addEventListener('click', () => saveKey(keyInput.value));
+  keyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveKey(keyInput.value);
+  });
+  keyStatusBtn.addEventListener('click', () => {
+    if (apiKey) {
+      if (confirm('¿Quieres cambiar o eliminar tu API key?')) {
+        clearKey();
+      }
+    } else {
+      keyInput.focus();
+    }
+  });
+
+  // ---------- Upload wiring ----------
+  function wireUpload(zone, input) {
+    zone.addEventListener('click', () => {
+      if (!apiKey) {
+        keyInput.focus();
+        return;
+      }
+      input.click();
+    });
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (apiKey) zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      if (!apiKey) return;
+      if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
+    });
+    input.addEventListener('change', (e) => {
+      if (e.target.files?.length) handleFiles(e.target.files);
+      input.value = '';
+    });
+  }
+  wireUpload(uploadZone, fileInput);
+  wireUpload(uploadMore, fileInputMore);
+
+  $('btnExpandAll').addEventListener('click', () => {
+    documents.forEach(d => { if (d.status === 'done') d.expanded = true; });
+    renderDocs();
+  });
+  $('btnCollapseAll').addEventListener('click', () => {
+    documents.forEach(d => { d.expanded = false; });
+    renderDocs();
+  });
+  $('btnClearAll').addEventListener('click', () => {
+    if (!confirm('¿Eliminar todos los documentos analizados?')) return;
+    stopSpeech();
+    documents.clear();
+    renderAll();
+  });
+
+  // ---------- File type detection ----------
+  function detectFileType(file) {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.pdf') || file.type === 'application/pdf') return 'pdf';
+    if (name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+    if (name.endsWith('.doc')) return 'doc-legacy';
+    return 'unknown';
+  }
+
+  function handleFiles(fileList) {
+    hideError();
+    const files = Array.from(fileList);
+    const accepted = [];
+    const rejected = [];
+
+    for (const f of files) {
+      const type = detectFileType(f);
+      if (type === 'unknown') { rejected.push(`${f.name}: formato no soportado`); continue; }
+      if (type === 'doc-legacy') { rejected.push(`${f.name}: formato .doc antiguo no soportado. Guárdalo como .docx`); continue; }
+      if (f.size > MAX_SIZE) { rejected.push(`${f.name}: excede 20 MB`); continue; }
+      accepted.push({ file: f, kind: type });
+    }
+
+    if (rejected.length) showError('No se pudieron agregar: ' + rejected.join(' · '));
+
+    for (const { file, kind } of accepted) {
+      const id = nextId++;
+      documents.set(id, { id, file, kind, status: 'loading', data: null, expanded: false, error: null });
+      processDocument(id);
+    }
+
+    renderAll();
+  }
+
+  async function processDocument(id) {
+    try {
+      const doc = documents.get(id);
+      if (!doc) return;
+
+      let result;
+      if (doc.kind === 'pdf') {
+        const base64 = await fileToBase64(doc.file);
+        result = await callAPIWithPDF(base64);
+      } else if (doc.kind === 'docx') {
+        const text = await extractDocxText(doc.file);
+        if (!text || text.trim().length < 20) {
+          throw new Error('El documento Word parece estar vacío');
+        }
+        result = await callAPIWithText(text);
+      }
+
+      const current = documents.get(id);
+      if (!current) return;
+      current.status = 'done';
+      current.data = result;
+      current.expanded = documents.size <= 3;
+      renderAll();
+    } catch (e) {
+      console.error(e);
+      const current = documents.get(id);
+      if (!current) return;
+      current.status = 'error';
+      current.error = friendlyError(e);
+      renderAll();
+    }
+  }
+
+  function friendlyError(e) {
+    const msg = (e?.message || '').toLowerCase();
+    if (msg.includes('401') || msg.includes('authentication') || msg.includes('invalid') && msg.includes('key')) {
+      return 'Tu API key no es válida. Haz clic en "KEY" arriba para corregirla.';
+    }
+    if (msg.includes('429') || msg.includes('rate')) {
+      return 'Has alcanzado el límite de solicitudes por minuto. Espera un momento e intenta de nuevo.';
+    }
+    if (msg.includes('credit') || msg.includes('balance')) {
+      return 'Tu cuenta de Anthropic no tiene saldo suficiente. Añade créditos en console.anthropic.com.';
+    }
+    if (msg.includes('vacío')) {
+      return 'El documento parece estar vacío o no se pudo extraer texto.';
+    }
+    if (msg.includes('failed to fetch') || msg.includes('network')) {
+      return 'Error de red. Revisa tu conexión a internet.';
+    }
+    return 'No se pudo analizar. Puede ser un PDF escaneado sin texto, dañado, o con formato no soportado.';
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function extractDocxText(file) {
+    const buffer = await file.arrayBuffer();
+    const result = await window.mammoth.extractRawText({ arrayBuffer: buffer });
+    return result.value;
+  }
+
+  const ANALYSIS_PROMPT = `Eres un abogado experto que analiza documentos legales en español (contratos, escrituras, pagarés, actas, poderes, convenios, etc.).
+
+Analiza el documento y responde EXCLUSIVAMENTE con un objeto JSON válido. NO uses markdown, NO uses bloques de código, NO añadas texto antes o después. Solo JSON puro con esta estructura exacta:
+
+{
+  "tipoDocumento": "tipo específico, ej: Contrato de arrendamiento, Pagaré mercantil, Escritura pública de compraventa, Acta de asamblea, Poder notarial",
+  "resumen": "2-3 oraciones claras en lenguaje llano explicando de qué trata el documento y su propósito principal",
+  "partes": [
+    { "nombre": "nombre o identificación", "rol": "rol, ej: Arrendador, Deudor, Vendedor" }
+  ],
+  "fechasClave": [
+    { "fecha": "fecha legible", "descripcion": "qué representa" }
+  ],
+  "clausulasClave": [
+    { "titulo": "título corto", "detalle": "explicación simple" }
+  ],
+  "alertas": [
+    { "severidad": "alta" | "media" | "baja", "problema": "descripción del error, cláusula abusiva, inconsistencia, dato faltante o riesgo" }
+  ],
+  "recomendaciones": ["acción sugerida 1", "acción sugerida 2"],
+  "lecturaVoz": "texto natural de 4-6 oraciones para ser LEÍDO EN VOZ ALTA. Sonar como si un abogado le explicara al cliente. Evita siglas, números largos y caracteres especiales."
+}
+
+Sé riguroso buscando problemas: fechas incoherentes, montos con discrepancia letra/cifra, firmas o sellos ausentes, cláusulas ambiguas o abusivas, referencias a leyes derogadas, identificaciones incompletas, falta de testigos, jurisdicciones contradictorias. Si un campo no aplica, usa array vacío.`;
+
+  async function callAPIWithPDF(base64) {
+    return callAPI([
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+      { type: 'text', text: ANALYSIS_PROMPT }
+    ]);
+  }
+
+  async function callAPIWithText(text) {
+    return callAPI([
+      { type: 'text', text: `A continuación el contenido de un documento Word extraído como texto plano:\n\n---INICIO DEL DOCUMENTO---\n${text}\n---FIN DEL DOCUMENTO---\n\n${ANALYSIS_PROMPT}` }
+    ]);
+  }
+
+  async function callAPI(content) {
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 4000,
+        messages: [{ role: 'user', content }]
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`${resp.status} ${errText}`);
+    }
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message || 'API error');
+
+    const raw = data.content.map(i => i.text || '').join('').trim();
+    const clean = raw.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    return JSON.parse(clean.slice(start, end + 1));
+  }
+
+  function showError(msg) { errorMsg.textContent = msg; errorBox.classList.remove('hidden'); }
+  function hideError() { errorBox.classList.add('hidden'); }
+
+  function renderAll() {
+    const hasDocs = documents.size > 0;
+    uploadZone.classList.toggle('hidden', hasDocs);
+    uploadMore.classList.toggle('hidden', !hasDocs || !apiKey);
+    toolbar.classList.toggle('hidden', !hasDocs);
+    disclaimer.classList.toggle('hidden', !hasDocs);
+    if (hasDocs) updateStats();
+    renderDocs();
+  }
+
+  function updateStats() {
+    const total = documents.size;
+    let done = 0, loading = 0, error = 0;
+    documents.forEach(d => {
+      if (d.status === 'done') done++;
+      else if (d.status === 'loading') loading++;
+      else if (d.status === 'error') error++;
+    });
+    const parts = [`<strong>${total}</strong> ${total === 1 ? 'documento' : 'documentos'}`];
+    if (loading) parts.push(`<strong>${loading}</strong> analizando`);
+    if (done) parts.push(`<strong>${done}</strong> listo${done === 1 ? '' : 's'}`);
+    if (error) parts.push(`<strong>${error}</strong> con error`);
+    statsText.innerHTML = parts.join(' · ');
+  }
+
+  function renderDocs() {
+    docsEl.innerHTML = '';
+    const sorted = Array.from(documents.values()).sort((a, b) => a.id - b.id);
+    for (const doc of sorted) docsEl.appendChild(renderDocCard(doc));
+  }
+
+  function renderDocCard(doc) {
+    const el = document.createElement('div');
+    el.className = 'doc' + (doc.expanded ? ' expanded' : '') + (doc.status === 'error' ? ' error-state' : '');
+
+    const statusIcon = doc.status === 'loading'
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>`
+      : doc.status === 'done'
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+
+    const typeText = doc.status === 'done'
+      ? escapeHTML(doc.data.tipoDocumento)
+      : doc.status === 'loading'
+      ? 'Analizando documento…'
+      : 'No se pudo analizar';
+
+    const isPlaying = currentSpeech?.id === doc.id;
+    const listenBtn = (doc.status === 'done')
+      ? `<button class="btn-listen-mini${isPlaying ? ' playing' : ''}" data-act="listen" data-id="${doc.id}">
+          ${isPlaying
+            ? `<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>DETENER`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>ESCUCHAR`}
+        </button>`
+      : '';
+
+    const chevron = (doc.status === 'done')
+      ? `<button class="btn-icon" data-act="toggle" data-id="${doc.id}" title="Expandir/contraer">
+           <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+         </button>`
+      : '';
+
+    const deleteBtn = `<button class="btn-icon" data-act="delete" data-id="${doc.id}" title="Eliminar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m5 0V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"/></svg>
+      </button>`;
+
+    const fileBadge = `<span class="file-badge ${doc.kind}">${doc.kind.toUpperCase()}</span>`;
+
+    let bodyHTML = '';
+    if (doc.status === 'done') {
+      bodyHTML = `<div class="doc-body"><div class="doc-body-inner">${renderAnalysisBody(doc.data)}</div></div>`;
+    } else if (doc.status === 'error') {
+      bodyHTML = `<div class="doc-error-msg">${escapeHTML(doc.error || 'Error desconocido')}</div>`;
+    }
+
+    el.innerHTML = `
+      <div class="doc-head" data-act="toggle" data-id="${doc.id}">
+        <div class="doc-status ${doc.status}">${statusIcon}</div>
+        <div class="doc-info">
+          <div class="doc-filename">${fileBadge}<span>${escapeHTML(doc.file.name)}</span></div>
+          <div class="doc-type ${doc.status !== 'done' ? 'pending' : ''}">${typeText}</div>
+        </div>
+        <div class="doc-actions">
+          ${listenBtn}
+          ${chevron}
+          ${deleteBtn}
+        </div>
+      </div>
+      ${bodyHTML}
+    `;
+
+    el.querySelectorAll('[data-act]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        const id = parseInt(btn.dataset.id, 10);
+        if (act === 'toggle') toggleDoc(id);
+        else if (act === 'delete') deleteDoc(id);
+        else if (act === 'listen') toggleSpeech(id);
+      });
+    });
+
+    return el;
+  }
+
+  function renderAnalysisBody(a) {
+    const partesHTML = a.partes?.length
+      ? a.partes.map(p => `
+          <div class="list-item">
+            <p class="item-name">${escapeHTML(p.nombre)}</p>
+            <p class="item-role">${escapeHTML(p.rol)}</p>
+          </div>`).join('')
+      : `<p class="empty">No identificadas.</p>`;
+
+    const fechasHTML = a.fechasClave?.length
+      ? a.fechasClave.map(f => `
+          <div class="list-item">
+            <p class="item-date">${escapeHTML(f.fecha)}</p>
+            <p class="item-desc">${escapeHTML(f.descripcion)}</p>
+          </div>`).join('')
+      : `<p class="empty">Sin fechas relevantes.</p>`;
+
+    const clausulasHTML = a.clausulasClave?.length ? `
+      <section>
+        <div class="section-label">Cláusulas clave</div>
+        <div class="clauses">
+          ${a.clausulasClave.map((c, i) => `
+            <div class="clause">
+              <div class="clause-num">${String(i + 1).padStart(2, '0')}</div>
+              <div>
+                <p class="clause-title">${escapeHTML(c.titulo)}</p>
+                <p class="clause-detail">${escapeHTML(c.detalle)}</p>
+              </div>
+            </div>`).join('')}
+        </div>
+      </section>` : '';
+
+    const alertasHTML = a.alertas?.length ? `
+      <section>
+        <div class="section-label">Alertas y posibles errores</div>
+        <div class="alerts">
+          ${a.alertas.map(al => {
+            const s = severityClass(al.severidad);
+            return `
+              <div class="alert ${s.cls}">
+                <span class="alert-badge ${s.cls}">${s.label}</span>
+                <p class="alert-text">${escapeHTML(al.problema)}</p>
+              </div>`;
+          }).join('')}
+        </div>
+      </section>`
+      : `<section class="no-alerts">
+          <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <p>No se detectaron errores ni cláusulas problemáticas evidentes.</p>
+        </section>`;
+
+    const recsHTML = a.recomendaciones?.length ? `
+      <section class="recs">
+        <div class="section-label">Recomendaciones</div>
+        <ul>
+          ${a.recomendaciones.map(r => `<li><span class="rec-arrow">→</span><span>${escapeHTML(r)}</span></li>`).join('')}
+        </ul>
+      </section>` : '';
+
+    return `
+      <section class="summary">
+        <div class="section-label">Resumen</div>
+        <p class="summary-text">${escapeHTML(a.resumen)}</p>
+      </section>
+
+      <div class="grid-2">
+        <section class="card">
+          <div class="section-label">Partes involucradas</div>
+          ${partesHTML}
+        </section>
+        <section class="card">
+          <div class="section-label">Fechas clave</div>
+          ${fechasHTML}
+        </section>
+      </div>
+
+      ${clausulasHTML}
+      ${alertasHTML}
+      ${recsHTML}
+    `;
+  }
+
+  function severityClass(sev) {
+    const s = (sev || '').toLowerCase();
+    if (s === 'alta') return { cls: 'high', label: 'ALTA' };
+    if (s === 'media') return { cls: 'med', label: 'MEDIA' };
+    return { cls: 'low', label: 'BAJA' };
+  }
+
+  function escapeHTML(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function toggleDoc(id) {
+    const doc = documents.get(id);
+    if (!doc || doc.status !== 'done') return;
+    doc.expanded = !doc.expanded;
+    renderDocs();
+  }
+
+  function deleteDoc(id) {
+    if (currentSpeech?.id === id) stopSpeech();
+    documents.delete(id);
+    renderAll();
+  }
+
+  function stopSpeech() {
+    window.speechSynthesis?.cancel();
+    currentSpeech = null;
+  }
+
+  function toggleSpeech(id) {
+    const doc = documents.get(id);
+    if (!doc || !doc.data?.lecturaVoz) return;
+
+    if (currentSpeech?.id === id) {
+      stopSpeech();
+      renderDocs();
+      return;
+    }
+
+    stopSpeech();
+
+    const u = new SpeechSynthesisUtterance(doc.data.lecturaVoz);
+    u.lang = 'es-ES';
+    u.rate = 0.95;
+    u.pitch = 1;
+    u.onend = () => { currentSpeech = null; renderDocs(); };
+    u.onerror = u.onend;
+    currentSpeech = { id, utterance: u };
+    window.speechSynthesis.speak(u);
+    renderDocs();
+  }
+
+  // Init
+  loadKey();
+</script>
+</body>
+</html>
